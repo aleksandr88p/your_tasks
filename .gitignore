@@ -1,0 +1,7 @@
+.env
+.cursorrules
+PLAN.md
+.venv/
+*.db
+__pycache__/
+*.pyc
