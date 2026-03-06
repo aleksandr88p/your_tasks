@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy import and_
 from typing import List, Optional
 
-from app.core.database import get_db
+from app.core.database import get_db, get_or_create_user
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskResponse, TaskStatusUpdate
 
@@ -18,7 +18,8 @@ async def create_task(
     db: AsyncSession = Depends(get_db)
 ):
     """Создать новую задачу"""
-    db_task = Task(title=task.title, user_id=telegram_user_id)
+    user = await get_or_create_user(telegram_user_id, db)
+    db_task = Task(title=task.title, user_id=user.id)
     
     db.add(db_task)
     await db.commit()
@@ -34,7 +35,8 @@ async def get_tasks(
     db: AsyncSession = Depends(get_db)
 ):
     """Получить список всех задач пользователя с опциональной фильтрацией по статусу"""
-    query = select(Task).where(Task.user_id == telegram_user_id)
+    user = await get_or_create_user(telegram_user_id, db)
+    query = select(Task).where(Task.user_id == user.id)
     
     if status:
         query = query.where(Task.status == status)
@@ -52,8 +54,9 @@ async def get_task(
     db: AsyncSession = Depends(get_db)
 ):
     """Получить задачу по ID"""
+    user = await get_or_create_user(telegram_user_id, db)
     result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == telegram_user_id)
+        select(Task).where(Task.id == task_id, Task.user_id == user.id)
     )
     task = result.scalar_one_or_none()
     
@@ -71,8 +74,9 @@ async def update_task_status(
     db: AsyncSession = Depends(get_db)
 ):
     """Изменить статус задачи"""
+    user = await get_or_create_user(telegram_user_id, db)
     result = await db.execute(
-        select(Task).where(and_(Task.id == task_id, Task.user_id == telegram_user_id))
+        select(Task).where(and_(Task.id == task_id, Task.user_id == user.id))
     )
     task = result.scalar_one_or_none()
     

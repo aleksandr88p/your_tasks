@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy import func, and_, case
 from typing import Optional
 
-from app.core.database import get_db
+from app.core.database import get_db, get_or_create_user
 from app.models.task import Task
 from app.models.timelog import TimeLog
 from app.schemas.stats import StatsSummary, TaskStats
@@ -19,27 +19,30 @@ async def get_stats_summary(
 ):
     """Получить общую статистику пользователя"""
     
+    # Получаем пользователя по telegram_id
+    user = await get_or_create_user(telegram_user_id, db)
+    
     # Считаем задачи по статусам
     tasks_result = await db.execute(
         select(
             func.count(Task.id).label('total_tasks'),
             func.sum(case((Task.status == 'active', 1), else_=0)).label('active_tasks'),
             func.sum(case((Task.status == 'completed', 1), else_=0)).label('completed_tasks')
-        ).where(Task.user_id == telegram_user_id)
+        ).where(Task.user_id == user.id)
     )
     tasks_stats = tasks_result.first()
     
     # Считаем общее время
     time_result = await db.execute(
         select(func.sum(TimeLog.minutes).label('total_minutes'))
-        .join(Task).where(Task.user_id == telegram_user_id)
+        .join(Task).where(Task.user_id == user.id)
     )
     total_minutes = time_result.scalar() or 0
     
     # Среднее время на задачу (только по задачам с логами)
     avg_result = await db.execute(
         select(func.avg(TimeLog.minutes).label('avg_minutes'))
-        .join(Task).where(Task.user_id == telegram_user_id)
+        .join(Task).where(Task.user_id == user.id)
     )
     avg_minutes = avg_result.scalar() or 0
     
@@ -60,9 +63,12 @@ async def get_task_stats(
 ):
     """Получить статистику по конкретной задаче"""
     
+    # Получаем пользователя по telegram_id
+    user = await get_or_create_user(telegram_user_id, db)
+    
     # Проверяем, что задача принадлежит пользователю
     task_result = await db.execute(
-        select(Task).where(and_(Task.id == task_id, Task.user_id == telegram_user_id))
+        select(Task).where(and_(Task.id == task_id, Task.user_id == user.id))
     )
     task = task_result.scalar_one_or_none()
     

@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy import and_
 from typing import List
 
-from app.core.database import get_db
+from app.core.database import get_db, get_or_create_user
 from app.models.timelog import TimeLog
 from app.models.task import Task
 from app.schemas.timelog import TimeLogCreate, TimeLogResponse, TimeLogWithTask
@@ -19,9 +19,12 @@ async def create_timelog(
     db: AsyncSession = Depends(get_db)
 ):
     """Добавить время к задаче"""
+    # Получаем пользователя по telegram_id
+    user = await get_or_create_user(telegram_user_id, db)
+    
     # Проверяем, что задача принадлежит пользователю
     task_result = await db.execute(
-        select(Task).where(and_(Task.id == timelog.task_id, Task.user_id == telegram_user_id))
+        select(Task).where(and_(Task.id == timelog.task_id, Task.user_id == user.id))
     )
     task = task_result.scalar_one_or_none()
     
@@ -47,8 +50,9 @@ async def get_timelogs(
     db: AsyncSession = Depends(get_db)
 ):
     """Получить все логи времени пользователя"""
+    user = await get_or_create_user(telegram_user_id, db)
     result = await db.execute(
-        select(TimeLog).join(Task).where(Task.user_id == telegram_user_id)
+        select(TimeLog).join(Task).where(Task.user_id == user.id)
     )
     timelogs = result.scalars().all()
     
@@ -68,9 +72,12 @@ async def get_task_timelogs(
     db: AsyncSession = Depends(get_db)
 ):
     """Получить логи времени по конкретной задаче"""
+    # Получаем пользователя по telegram_id
+    user = await get_or_create_user(telegram_user_id, db)
+    
     # Проверяем, что задача принадлежит пользователю
     task_result = await db.execute(
-        select(Task).where(and_(Task.id == task_id, Task.user_id == telegram_user_id))
+        select(Task).where(and_(Task.id == task_id, Task.user_id == user.id))
     )
     task = task_result.scalar_one_or_none()
     
